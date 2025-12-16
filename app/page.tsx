@@ -1,6 +1,7 @@
-import { LogoMark } from "@/components/LogoMark";
-import { WaitlistForm } from "@/components/WaitlistForm";
+"use client";
 
+import { LogoMark } from "../components/LogoMark";
+import { WaitlistForm } from "../components/WaitlistForm";
 export default function Page() {
     return (
         <main className="container">
