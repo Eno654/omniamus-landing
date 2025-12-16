@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Client } from "pg";
 import crypto from "crypto";
-import { sendMail } from "@/lib/mailer";
+import { sendMail } from "../../../../lib/mailer";
 
 export async function POST(req: Request) {
   try {

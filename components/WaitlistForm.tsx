@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PrivacySummaryModal } from "@/components/PrivacySummaryModal";
+import PrivacySummaryModal from "./PrivacySummaryModal";
 
 type Role = "Creator" | "Viewer" | "Press";
 
