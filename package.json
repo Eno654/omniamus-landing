@@ -1,0 +1,22 @@
+{
+  "name": "omniamus-landing",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "latest",
+    "nodemailer": "^7.0.11",
+    "pg": "^8.13.1",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^7.0.4"
+  }
+}
