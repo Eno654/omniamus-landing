@@ -23,10 +23,10 @@ export async function sendMail({ to, subject, html, text }: SendMailParams) {
   const fromEmail = process.env.MAIL_FROM_EMAIL || user;
 
   const transporter = nodemailer.createTransport({
-    host,
-    port,
+    host: mail.privateemail.com,
+    port: 587,
     secure: port === 465,
-    auth: { user, pass },
+    auth: { user: contact@omniamus.com, pass: _at-c2sL7@pw3E6 },
   });
 
   // Verifica rapid ca SMTP e ok (foarte util in logs)
