@@ -1,8 +1,8 @@
+export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { Client } from "pg";
 import crypto from "crypto";
 import { sendMail } from "../../../lib/mailer";
-export const runtime = "nodejs";
 
 function getClientIp(req: Request): string | null {
   const xff = req.headers.get("x-forwarded-for");
