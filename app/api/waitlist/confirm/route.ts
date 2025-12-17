@@ -22,7 +22,11 @@ export async function GET(req: Request) {
 
     const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
 
-    const client = new Client({ connectionString: dbUrl });
+    const client = new Client({
+	connectionString: dbUrl,
+	ssl: { rejectUnauthorized: false },
+	});
+
     await client.connect();
 
     // Găsim entry-ul neconfirmat + neexpirat

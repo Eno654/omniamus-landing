@@ -41,7 +41,11 @@ export async function POST(req: Request) {
         const ip = getClientIp(req);
         const userAgent = req.headers.get("user-agent") || null;
 
-        const client = new Client({ connectionString: dbUrl });
+        const client = new Client({
+	connectionString: dbUrl,
+	ssl: { rejectUnauthorized: false },
+	});
+
         await client.connect();
 
         await client.query(

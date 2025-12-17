@@ -19,7 +19,11 @@ export async function POST(req: Request) {
     const dbUrl = process.env.DATABASE_URL;
     if (!dbUrl) return genericOk;
 
-    const client = new Client({ connectionString: dbUrl });
+    const client = new Client({
+	connectionString: dbUrl,
+	ssl: { rejectUnauthorized: false },
+	});
+
     await client.connect();
 
     // Asigură coloanele (idempotent)
@@ -120,8 +124,9 @@ export async function POST(req: Request) {
     });
 
     return genericOk;
-  } catch {
-    // Tot generic: nu dăm indicii
-    return NextResponse.json({ ok: true });
-  }
+} catch (err) {
+  console.error("WAITLIST ERROR:", err);
+  return NextResponse.json({ error: "Server error." }, { status: 500 });
+}
+
 }
