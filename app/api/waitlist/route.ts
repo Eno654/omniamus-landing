@@ -153,6 +153,17 @@ export async function POST(req: Request) {
     const appUrl = process.env.APP_URL || "http://localhost:3000";
     const confirmUrl = `${appUrl}/api/waitlist/confirm?token=${rawToken}`;
 
+console.log("WAITLIST ENV CHECK", {
+  runtime: process.env.NEXT_RUNTIME,
+  hasHost: Boolean(process.env.SMTP_HOST),
+  hasPort: Boolean(process.env.SMTP_PORT),
+  hasUser: Boolean(process.env.SMTP_USER),
+  hasPass: Boolean(process.env.SMTP_PASS),
+  hasFrom: Boolean(process.env.MAIL_FROM_EMAIL),
+  appUrl: process.env.APP_URL,
+});
+
+try {
 console.log("WAITLIST: about to send email", { email });
 
 const mailResult = await sendMail({
@@ -177,6 +188,7 @@ const mailResult = await sendMail({
       </p>
     </div>
   `,
+  
 });
 
 console.log("WAITLIST: mail result", mailResult);
@@ -189,7 +201,7 @@ return NextResponse.json({
 });
 } catch (err) {
   console.error("WAITLIST: error", err);
-  return NextResponse.json({ error: "Server error." }, { status: 500 });
+  return NextResponse.json({ ok: false, stored: true, emailSent: false, err: String(err) }, { status: 500 });
 }
-
+}
 }
