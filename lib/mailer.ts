@@ -7,38 +7,43 @@ type SendMailParams = {
   text?: string;
 };
 
-export async function sendMail({ to, subject, html, text }: SendMailParams) {
-  const host = process.env.SMTP_HOST;
-  const port = Number(process.env.SMTP_PORT || "587");
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  const from = process.env.SMTP_FROM;
+function requireEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing environment variable: ${name}`);
+  return v;
+}
 
-  // Fail-soft: dacă nu e configurat SMTP, nu blocăm flow-ul
-  if (!host || !user || !pass || !from) {
-    return {
-      sent: false,
-      reason: "SMTP not configured",
-    };
-  }
+export async function sendMail({ to, subject, html, text }: SendMailParams) {
+  const host = requireEnv("SMTP_HOST");
+  const port = Number(requireEnv("SMTP_PORT"));
+  const user = requireEnv("SMTP_USER");
+  const pass = requireEnv("SMTP_PASS");
+
+  const fromName = process.env.MAIL_FROM_NAME || "Omniamus";
+  const fromEmail = process.env.MAIL_FROM_EMAIL || user;
 
   const transporter = nodemailer.createTransport({
     host,
     port,
-    secure: port === 465, // true doar pentru SMTPS
-    auth: {
-      user,
-      pass,
-    },
+    secure: port === 465,
+    auth: { user, pass },
   });
 
-  await transporter.sendMail({
-    from,
+  // Verifica rapid ca SMTP e ok (foarte util in logs)
+  await transporter.verify();
+
+  const info = await transporter.sendMail({
+    from: `${fromName} <${fromEmail}>`,
     to,
     subject,
-    text,
+    text: text ?? undefined,
     html,
   });
 
-  return { sent: true };
+  return {
+    messageId: info.messageId,
+    accepted: info.accepted,
+    rejected: info.rejected,
+    response: info.response,
+  };
 }
