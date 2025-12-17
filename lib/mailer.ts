@@ -1,49 +1,44 @@
 import nodemailer from "nodemailer";
 
-type SendMailParams = {
+type SendMailArgs = {
   to: string;
   subject: string;
   html: string;
-  text?: string;
 };
 
-function requireEnv(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing environment variable: ${name}`);
-  return v;
-}
+export async function sendMail({ to, subject, html }: SendMailArgs) {
+  const smtpHost = process.env.SMTP_HOST;
+  const smtpPort = Number(process.env.SMTP_PORT || 587);
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+  const fromEmail = process.env.FROM_EMAIL || smtpUser;
 
-export async function sendMail({ to, subject, html, text }: SendMailParams) {
-  const host = requireEnv("SMTP_HOST");
-  const port = Number(requireEnv("SMTP_PORT"));
-  const user = requireEnv("SMTP_USER");
-  const pass = requireEnv("SMTP_PASS");
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    throw new Error("SMTP not configured (missing SMTP_HOST/SMTP_USER/SMTP_PASS)");
+  }
 
-  const fromName = process.env.MAIL_FROM_NAME || "Omniamus";
-  const fromEmail = process.env.MAIL_FROM_EMAIL || user;
-
+  // ✅ Config corect pentru port 587 (STARTTLS)
   const transporter = nodemailer.createTransport({
-    host: mail.privateemail.com,
-    port: 587,
-    secure: port === 465,
-    auth: { user: contact@omniamus.com, pass: _at-c2sL7@pw3E6 },
+    host: smtpHost,
+    port: smtpPort,
+    secure: false,      // IMPORTANT: 587 = STARTTLS, nu SMTPS direct
+    requireTLS: true,   // forțează upgrade TLS
+    auth: { user: smtpUser, pass: smtpPass },
+    tls: {
+      servername: smtpHost,  // ajută SNI
+      minVersion: "TLSv1.2",
+      // Dacă după asta încă vezi SELF_SIGNED_CERT_IN_CHAIN, atunci:
+      // rejectUnauthorized: false,
+    },
   });
 
-  // Verifica rapid ca SMTP e ok (foarte util in logs)
+  // verify poate fi păstrat (bun pentru debugging)
   await transporter.verify();
 
-  const info = await transporter.sendMail({
-    from: `${fromName} <${fromEmail}>`,
+  await transporter.sendMail({
+    from: fromEmail,
     to,
     subject,
-    text: text ?? undefined,
     html,
   });
-
-  return {
-    messageId: info.messageId,
-    accepted: info.accepted,
-    rejected: info.rejected,
-    response: info.response,
-  };
 }

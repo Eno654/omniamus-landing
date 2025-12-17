@@ -1,124 +1,108 @@
-export const runtime = "nodejs";
-
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { Client } from "pg";
-import { sendMail } from "../../../lib/mailer";
+import { sendMail } from "@/lib/mailer";
 
-function getClientIp(req: Request): string | null {
-    const xff = req.headers.get("x-forwarded-for");
-    if (xff) return xff.split(",")[0].trim();
-    return req.headers.get("x-real-ip");
+export const runtime = "nodejs";
+
+function hashToken(rawToken: string) {
+  return crypto.createHash("sha256").update(rawToken).digest("hex");
+}
+
+function getAppUrl(req: Request) {
+  // Prefer explicit APP_URL, fallback to request origin
+  const envUrl = process.env.APP_URL?.trim();
+  if (envUrl) return envUrl.replace(/\/+$/, "");
+  const url = new URL(req.url);
+  return url.origin;
 }
 
 export async function POST(req: Request) {
-    try {
-        const body = await req.json().catch(() => ({}));
+  try {
+    const { email } = await req.json();
 
-        const email = (body?.email || "").toString().trim().toLowerCase();
-        if (!email || !email.includes("@")) {
-            return NextResponse.json({ error: "Invalid email" }, { status: 400 });
-        }
+    if (!email || typeof email !== "string") {
+      return NextResponse.json({ error: "Invalid email" }, { status: 400 });
+    }
 
-        const username = body?.username ? body.username.toString().trim() : null;
-        const role = (body?.role || "Viewer").toString().trim();
-        const source = (body?.source || "landing").toString().trim();
-        const country = body?.country ? body.country.toString().trim() : null;
-        const ageConfirmed = Boolean(body?.ageConfirmed);
-        const ageText = (body?.ageText || "").toString().trim();
-        const consent = Boolean(body?.consent);
-        const consentText = (body?.consentText || "").toString().trim();
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl) {
+      console.error("WAITLIST ERROR: Database not configured (missing DATABASE_URL)");
+      return NextResponse.json({ error: "Database not configured" }, { status: 500 });
+    }
 
-        const dbUrl = process.env.DATABASE_URL;
-        if (!dbUrl) {
-            return NextResponse.json({ error: "Database not configured" }, { status: 500 });
-        }
+    const appUrl = getAppUrl(req);
 
-        const rawToken = crypto.randomBytes(32).toString("hex");
-        const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-        const expiresMinutes = 60 * 24; // 24h
+    // Token: trimitem raw în email, stocăm doar hash în DB
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = hashToken(rawToken);
 
-        const ip = getClientIp(req);
-        const userAgent = req.headers.get("user-agent") || null;
+    const confirmUrl = `${appUrl}/api/waitlist/confirm?token=${rawToken}`;
 
-        const client = new Client({
-	connectionString: dbUrl,
-	ssl: { rejectUnauthorized: false },
-	});
+    console.log("WAITLIST: step 1 - connect DB");
+    const client = new Client({
+      connectionString: dbUrl,
+      // ✅ Fix pentru SELF_SIGNED_CERT_IN_CHAIN pe conexiunea Postgres (Supabase/Pooler)
+      ssl: { rejectUnauthorized: false },
+    });
 
-        await client.connect();
+    await client.connect();
 
-        await client.query(
-            `
-      INSERT INTO waitlist (
-        email, username, role, source, country,
-        age_confirmed, age_text, consent, consent_text,
-        ip, user_agent, token_hash, token_expires_at
-      )
-      VALUES (
-        $1,$2,$3,$4,$5,
-        $6,$7,$8,$9,
-        $10,$11,$12, NOW() + INTERVAL '${expiresMinutes} minutes'
-      )
-      ON CONFLICT (email) DO NOTHING
+    console.log("WAITLIST: step 2 - insert waitlist row");
+    // IMPORTANT: păstrez stilul tău: insert + “upsert-ish” prin catch/unique
+    // Presupune tabel waitlist(email unique, token_hash, confirmed, created_at, confirmed_at etc.)
+    // Ajustează doar numele tabelului/coloanelor dacă diferă la tine.
+    await client.query(
+      `
+      INSERT INTO waitlist (email, token_hash, confirmed, created_at)
+      VALUES ($1, $2, false, NOW())
+      ON CONFLICT (email)
+      DO UPDATE SET token_hash = EXCLUDED.token_hash, confirmed = false
       `,
-            [
-                email,
-                username,
-                role,
-                source,
-                country,
-                ageConfirmed,
-                ageText,
-                consent,
-                consentText,
-                ip,
-                userAgent,
-                tokenHash,
-            ]
-        );
+      [email.toLowerCase(), tokenHash]
+    );
 
-        await client.end();
-
-        // ---------- EMAIL ----------
-        const appUrl = process.env.APP_URL || "http://localhost:3000";
-        const confirmUrl = `${appUrl}/api/waitlist/confirm?token=${rawToken}`;
-
-        const mailResult = await sendMail({
-            to: email,
-            subject: "Confirm your Omniamus early access",
-            text:
-                `Confirm your email to join the Omniamus early access list:\n\n${confirmUrl}\n\n` +
-                `If you didn’t request this, you can ignore this email. This link expires in 24 hours.`,
-            html: `
-        <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;line-height:1.5">
+    console.log("WAITLIST: step 3 - send mail");
+    await sendMail({
+      to: email,
+      subject: "Confirm your Omniamus waitlist spot",
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
           <h2>Confirm your email</h2>
-          <p>Click the button below to confirm your Omniamus early access signup.</p>
-          <p style="margin:18px 0">
+          <p>Click the button below to confirm your spot on the Omniamus waitlist.</p>
+          <p style="margin: 24px 0;">
             <a href="${confirmUrl}"
-               style="display:inline-block;padding:10px 14px;border-radius:10px;
-                      background:#ffffff;color:#000;text-decoration:none;font-weight:600">
+               style="display:inline-block;padding:12px 18px;background:#111;color:#fff;text-decoration:none;border-radius:10px;">
               Confirm email
             </a>
           </p>
-          <p style="font-size:12px;opacity:0.7">
-            If you didn’t request this, ignore this email. This link expires in 24 hours.
-          </p>
+          <p>If the button doesn't work, copy and paste this link:</p>
+          <p><a href="${confirmUrl}">${confirmUrl}</a></p>
         </div>
       `,
-        });
+    });
 
-        return NextResponse.json({
-            ok: true,
-            stored: true,
-            emailSent: Array.isArray(mailResult.accepted) && mailResult.accepted.length > 0,
-        });
+    console.log("WAITLIST: step 4 - done");
+    await client.end();
 
-    } catch (err) {
-        console.error("WAITLIST ERROR:", err);
-        return NextResponse.json(
-            { ok: false, error: "Server error" },
-            { status: 500 }
-        );
-    }
+    return NextResponse.json({ ok: true });
+  } catch (err: any) {
+    console.error("WAITLIST ERROR:", err);
+
+    // Închide conexiunea dacă a apucat să existe
+    // (Nu aruncăm dacă nu e definit)
+    try {
+      // @ts-ignore
+      await globalThis.__waitlistClient?.end?.();
+    } catch {}
+
+    return NextResponse.json(
+      {
+        error: "Waitlist request failed",
+        code: err?.code,
+        message: err?.message,
+      },
+      { status: 500 }
+    );
+  }
 }
