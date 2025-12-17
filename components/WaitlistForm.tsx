@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import PrivacySummaryModal from "./PrivacySummaryModalClean";
-import PrivacySummaryModalClean from "./PrivacySummaryModalClean";
 
 type Role = "Creator" | "Viewer" | "Press";
 
@@ -204,7 +203,7 @@ export function WaitlistForm() {
                 {status === "error" && <p>⚠️ {message}</p>}
             </div>
 
-            <PrivacySummaryModalClean
+            <PrivacySummaryModal
                 open={showPrivacy}
                 onClose={() => setShowPrivacy(false)}
             />
