@@ -7,7 +7,7 @@ type Props = {
     onClose: () => void;
 };
 
-export default function PrivacySummaryModal({ open, onClose }: Props) {
+export default function PrivacySummaryModalClean({ open, onClose }: Props) {
     useEffect(() => {
         if (!open) return;
 
