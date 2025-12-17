@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { Client } from "pg";
-import { sendMail } from "@/lib/mailer";
+import { sendMail } from "../../../lib/mailer";
 
 function getClientIp(req: Request): string | null {
     const xff = req.headers.get("x-forwarded-for");
