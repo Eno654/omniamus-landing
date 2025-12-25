@@ -119,7 +119,7 @@ export default function ForCreatorsPage() {
       <section className="section">
         <h2>Economics (transparent by design)</h2>
         <ul>
-          <li>Micro-transactions per post (you set the price)</li>
+          <li>Micro-transactions per post (creators can set a fixed price — or let pricing evolve dynamically over time, based on real post-consumption signals)</li>
           <li>Clear split (no hidden fees)</li>
           <li>No pay-to-boost</li>
           <li>No algorithmic throttling</li>
