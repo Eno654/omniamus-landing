@@ -3,10 +3,11 @@ import nodemailer from "nodemailer";
 type SendMailArgs = {
   to: string;
   subject: string;
-  html: string;
+  html?: string;
+  text?: string;
 };
 
-export async function sendMail({ to, subject, html }: SendMailArgs) {
+export async function sendMail({ to, subject, html, text }: SendMailArgs) {
   const smtpHost = process.env.SMTP_HOST;
   const smtpPort = Number(process.env.SMTP_PORT || 587);
   const smtpUser = process.env.SMTP_USER;
@@ -16,29 +17,30 @@ export async function sendMail({ to, subject, html }: SendMailArgs) {
   if (!smtpHost || !smtpUser || !smtpPass) {
     throw new Error("SMTP not configured (missing SMTP_HOST/SMTP_USER/SMTP_PASS)");
   }
+  if (!html && !text) {
+    throw new Error("Email content missing (provide html and/or text)");
+  }
 
-  // ✅ Config corect pentru port 587 (STARTTLS)
   const transporter = nodemailer.createTransport({
     host: smtpHost,
     port: smtpPort,
-    secure: false,      // IMPORTANT: 587 = STARTTLS, nu SMTPS direct
-    requireTLS: true,   // forțează upgrade TLS
+    secure: false, // 587 = STARTTLS
+    requireTLS: true,
     auth: { user: smtpUser, pass: smtpPass },
     tls: {
-      servername: smtpHost,  // ajută SNI
+      servername: smtpHost,
       minVersion: "TLSv1.2",
-      // Dacă după asta încă vezi SELF_SIGNED_CERT_IN_CHAIN, atunci:
-      // rejectUnauthorized: false,
+
+      // SMTP TLS workaround (MVP)
+      rejectUnauthorized: false,
     },
   });
-
-  // verify poate fi păstrat (bun pentru debugging)
-  await transporter.verify();
 
   await transporter.sendMail({
     from: fromEmail,
     to,
     subject,
     html,
+    text,
   });
 }

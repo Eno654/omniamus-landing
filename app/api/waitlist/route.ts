@@ -1,108 +1,109 @@
-import { NextResponse } from "next/server";
-import crypto from "crypto";
-import { Client } from "pg";
-import { sendMail } from "@/lib/mailer";
+import { NextRequest, NextResponse } from "next/server";
+import { Pool } from "pg";
 
-export const runtime = "nodejs";
+const pool = process.env.DATABASE_URL
+  ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+  : null;
 
-function hashToken(rawToken: string) {
-  return crypto.createHash("sha256").update(rawToken).digest("hex");
-}
-
-function getAppUrl(req: Request) {
-  // Prefer explicit APP_URL, fallback to request origin
-  const envUrl = process.env.APP_URL?.trim();
-  if (envUrl) return envUrl.replace(/\/+$/, "");
-  const url = new URL(req.url);
-  return url.origin;
-}
-
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const { email } = await req.json();
+    const body = await req.json();
+    const { email, username, role, country } = body;
 
-    if (!email || typeof email !== "string") {
-      return NextResponse.json({ error: "Invalid email" }, { status: 400 });
+    // Validation
+    if (!email || !email.includes("@")) {
+      return NextResponse.json({ error: "Valid email required" }, { status: 400 });
     }
 
-    const dbUrl = process.env.DATABASE_URL;
-    if (!dbUrl) {
-      console.error("WAITLIST ERROR: Database not configured (missing DATABASE_URL)");
-      return NextResponse.json({ error: "Database not configured" }, { status: 500 });
+    if (!role || !["creator", "viewer", "both"].includes(role)) {
+      return NextResponse.json({ error: "Role must be creator, viewer, or both" }, { status: 400 });
     }
 
-    const appUrl = getAppUrl(req);
+    // Clean username (remove @ if present, lowercase)
+    const cleanUsername = username?.trim().toLowerCase().replace(/^@/, "") || null;
 
-    // Token: trimitem raw în email, stocăm doar hash în DB
-    const rawToken = crypto.randomBytes(32).toString("hex");
-    const tokenHash = hashToken(rawToken);
+    // Validate username format if provided
+    if (cleanUsername && !/^[a-z0-9_]{3,20}$/.test(cleanUsername)) {
+      return NextResponse.json({ 
+        error: "Username must be 3-20 characters, only letters, numbers, and underscores" 
+      }, { status: 400 });
+    }
 
-    const confirmUrl = `${appUrl}/api/waitlist/confirm?token=${rawToken}`;
+    if (!pool) {
+      console.log("No DATABASE_URL, returning success without storing");
+      return NextResponse.json({ 
+        success: true, 
+        stored: false, 
+        message: "Received (no database configured)" 
+      });
+    }
 
-    console.log("WAITLIST: step 1 - connect DB");
-    const client = new Client({
-      connectionString: dbUrl,
-      // ✅ Fix pentru SELF_SIGNED_CERT_IN_CHAIN pe conexiunea Postgres (Supabase/Pooler)
-      ssl: { rejectUnauthorized: false },
-    });
-
-    await client.connect();
-
-    console.log("WAITLIST: step 2 - insert waitlist row");
-    // IMPORTANT: păstrez stilul tău: insert + “upsert-ish” prin catch/unique
-    // Presupune tabel waitlist(email unique, token_hash, confirmed, created_at, confirmed_at etc.)
-    // Ajustează doar numele tabelului/coloanelor dacă diferă la tine.
-    await client.query(
-      `
-      INSERT INTO waitlist (email, token_hash, confirmed, created_at)
-      VALUES ($1, $2, false, NOW())
-      ON CONFLICT (email)
-      DO UPDATE SET token_hash = EXCLUDED.token_hash, confirmed = false
-      `,
-      [email.toLowerCase(), tokenHash]
+    // Check if email already exists
+    const existingEmail = await pool.query(
+      "SELECT id FROM waitlist WHERE email = $1",
+      [email.toLowerCase().trim()]
     );
 
-    console.log("WAITLIST: step 3 - send mail");
-    await sendMail({
-      to: email,
-      subject: "Confirm your Omniamus waitlist spot",
-      html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-          <h2>Confirm your email</h2>
-          <p>Click the button below to confirm your spot on the Omniamus waitlist.</p>
-          <p style="margin: 24px 0;">
-            <a href="${confirmUrl}"
-               style="display:inline-block;padding:12px 18px;background:#111;color:#fff;text-decoration:none;border-radius:10px;">
-              Confirm email
-            </a>
-          </p>
-          <p>If the button doesn't work, copy and paste this link:</p>
-          <p><a href="${confirmUrl}">${confirmUrl}</a></p>
-        </div>
-      `,
-    });
+    if (existingEmail.rows.length > 0) {
+      return NextResponse.json({ 
+        error: "This email is already on the waitlist!" 
+      }, { status: 409 });
+    }
 
-    console.log("WAITLIST: step 4 - done");
-    await client.end();
+    // Check if username already taken (in waitlist)
+    if (cleanUsername) {
+      const existingUsername = await pool.query(
+        "SELECT id FROM waitlist WHERE username = $1",
+        [cleanUsername]
+      );
 
-    return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    console.error("WAITLIST ERROR:", err);
+      if (existingUsername.rows.length > 0) {
+        return NextResponse.json({ 
+          error: "This username is already reserved. Try another one!" 
+        }, { status: 409 });
+      }
+    }
 
-    // Închide conexiunea dacă a apucat să existe
-    // (Nu aruncăm dacă nu e definit)
-    try {
-      // @ts-ignore
-      await globalThis.__waitlistClient?.end?.();
-    } catch {}
+    // Insert into waitlist
+    const result = await pool.query(
+      `INSERT INTO waitlist (email, username, role, country, source, created_at)
+       VALUES ($1, $2, $3, $4, $5, now())
+       RETURNING id, email, username`,
+      [
+        email.toLowerCase().trim(),
+        cleanUsername,
+        role,
+        country?.trim() || null,
+        "landing"
+      ]
+    );
 
-    return NextResponse.json(
-      {
-        error: "Waitlist request failed",
-        code: err?.code,
-        message: err?.message,
+    return NextResponse.json({ 
+      success: true, 
+      stored: true,
+      data: {
+        id: result.rows[0].id,
+        email: result.rows[0].email,
+        username: result.rows[0].username
       },
-      { status: 500 }
-    );
+      message: cleanUsername 
+        ? "You're on the list! We'll confirm your username within 24 hours."
+        : "You're on the list! We'll notify you when we launch."
+    });
+
+  } catch (error: any) {
+    console.error("Waitlist error:", error);
+    
+    // Handle unique constraint violations
+    if (error.code === "23505") {
+      if (error.constraint?.includes("email")) {
+        return NextResponse.json({ error: "This email is already on the waitlist!" }, { status: 409 });
+      }
+      if (error.constraint?.includes("username")) {
+        return NextResponse.json({ error: "This username is already reserved!" }, { status: 409 });
+      }
+    }
+
+    return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import { LogoMark } from "../components/LogoMark";
-import { WaitlistForm } from "../components/WaitlistForm";
+import WaitlistForm from "../components/WaitlistForm";
+
 export default function Page() {
     return (
         <main className="container">
@@ -15,7 +16,17 @@ export default function Page() {
                 </div>
 
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                    <a className="badge" href="/docs/Omniamus_Whitepaper_Official_EN_Revised.pdf" target="_blank" rel="noreferrer">
+                    {/* NEW: For creators */}
+                    <a className="badge" href="/for-creators">
+                        For creators
+                    </a>
+
+                    <a
+                        className="badge"
+                        href="/docs/Omniamus_Whitepaper_Official_EN_Revised.pdf"
+                        target="_blank"
+                        rel="noreferrer"
+                    >
                         Whitepaper (EN) PDF
                     </a>
                     <a
@@ -57,6 +68,17 @@ export default function Page() {
                     >
                         Join early access
                     </a>
+
+                    <a
+                        className="btn secondary"
+                        href="/for-creators"
+                        onClick={(e) => {
+                            // keep it clean: normal navigation, no scroll intercept needed
+                        }}
+                    >
+                        For creators
+                    </a>
+
                     <a
                         className="btn secondary"
                         href="#reserve"
