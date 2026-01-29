@@ -24,7 +24,7 @@ async function sendConfirmationEmail(email: string, username: string | null) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Omniamus <noreply@send.omniamus.com>",
+        from: "Omniamus <noreply@omniamus.com>",
         to: email,
         subject: username 
           ? `Welcome to Omniamus – @${username} reserved!`
