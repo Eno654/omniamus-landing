@@ -102,7 +102,7 @@ export default function WaitlistForm() {
             <input
               id="username"
               type="text"
-              placeholder="@yourname (optional)"
+              placeholder="yourname (optional)"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               disabled={status === "loading"}
