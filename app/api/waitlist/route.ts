@@ -5,6 +5,77 @@ const pool = process.env.DATABASE_URL
   ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
   : null;
 
+// Send confirmation email via Resend
+async function sendConfirmationEmail(email: string, username: string | null) {
+  if (!process.env.RESEND_API_KEY) {
+    console.log("No RESEND_API_KEY, skipping email");
+    return;
+  }
+
+  const usernameText = username 
+    ? `Your requested username: <strong>@${username}</strong><br>We'll confirm availability within 24 hours.`
+    : `You'll be notified when Omniamus launches.`;
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "Omniamus <noreply@send.omniamus.com>",
+        to: email,
+        subject: username 
+          ? `Welcome to Omniamus – @${username} reserved!`
+          : "Welcome to Omniamus – You're on the list!",
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+            <h1 style="color: #0b0d12; margin-bottom: 24px;">Welcome to Omniamus!</h1>
+            
+            <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+              Thank you for joining the waitlist. You're now part of a community that believes content value should be measured after consumption, not before.
+            </p>
+            
+            <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; margin: 24px 0;">
+              <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0;">
+                ${usernameText}
+              </p>
+            </div>
+            
+            <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+              <strong>What's next?</strong><br>
+              We'll send you updates as we approach launch. No spam, ever.
+            </p>
+
+            <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+              In the meantime, you can support our campaign:<br>
+              <a href="https://www.indiegogo.com/projects/omniamus" style="color: #2563eb;">Support on IndieGoGo</a>
+            </p>
+            
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;">
+            
+            <p style="color: #9ca3af; font-size: 14px;">
+              <strong>Omniamus</strong><br>
+              Truth. Reward. Freedom.<br>
+              <a href="https://www.omniamus.com" style="color: #9ca3af;">www.omniamus.com</a>
+            </p>
+          </div>
+        `,
+      }),
+    });
+
+    if (!res.ok) {
+      const error = await res.text();
+      console.error("Resend error:", error);
+    } else {
+      console.log("Confirmation email sent to:", email);
+    }
+  } catch (error) {
+    console.error("Failed to send email:", error);
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -77,6 +148,9 @@ export async function POST(req: NextRequest) {
         "landing"
       ]
     );
+
+    // Send confirmation email (don't await - fire and forget)
+    sendConfirmationEmail(result.rows[0].email, result.rows[0].username);
 
     return NextResponse.json({ 
       success: true, 
